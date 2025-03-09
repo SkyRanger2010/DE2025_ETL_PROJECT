@@ -12,7 +12,7 @@ load_dotenv()
 # Настройки MongoDB
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:admin@mongo:27017")
 client = MongoClient(MONGO_URI)
-db = client["etl_project"]
+db = client[os.getenv("MONGO_DB")]
 
 # Инициализация Faker
 fake = Faker()
@@ -110,25 +110,32 @@ def generate_search_queries(n):
 print("Начинается генерация данных...")
 
 # Генерация и вставка данных в MongoDB
-db.user_sessions.insert_many(generate_user_sessions(get_count("USER_SESSIONS_COUNT", 1000)))
-print("Сессии пользователей загружены в MongoDB")
+session_counts = get_count("USER_SESSIONS_COUNT", 1000)
+db.user_sessions.insert_many(generate_user_sessions(session_counts))
+print("Сессии пользователей загружены в MongoDB:", session_counts)
 
-db.product_price_history.insert_many(generate_product_price_history(get_count("PRODUCT_PRICE_HISTORY_COUNT", 500)))
-print("История цен загружена в MongoDB")
+price_histories = get_count("PRODUCT_PRICE_HISTORY_COUNT", 1000)
+db.product_price_history.insert_many(generate_product_price_history(price_histories))
+print("История цен загружена в MongoDB: ", price_histories)
 
-db.event_logs.insert_many(generate_event_logs(get_count("EVENT_LOGS_COUNT", 2000)))
-print("Логи событий загружены в MongoDB")
+event_logs = get_count("EVENT_LOGS_COUNT", 2000)
+db.event_logs.insert_many(generate_event_logs(event_logs))
+print("Логи событий загружены в MongoDB: ", event_logs)
 
-db.support_tickets.insert_many(generate_support_tickets(get_count("SUPPORT_TICKETS_COUNT", 500)))
-print("Тикеты поддержки загружены в MongoDB")
+support_tickets = get_count("SUPPORT_TICKETS_COUNT", 500)
+db.support_tickets.insert_many(generate_support_tickets(support_tickets))
+print("Тикеты поддержки загружены в MongoDB: ", support_tickets)
 
-db.user_recommendations.insert_many(generate_user_recommendations(get_count("USER_RECOMMENDATIONS_COUNT", 1000)))
-print("Рекомендации пользователей загружены в MongoDB")
+user_recommendations = get_count("USER_RECOMMENDATIONS_COUNT", 1000)
+db.user_recommendations.insert_many(generate_user_recommendations(user_recommendations))
+print("Рекомендации пользователей загружены в MongoDB: ", user_recommendations)
 
-db.moderation_queue.insert_many(generate_moderation_queue(get_count("MODERATION_QUEUE_COUNT", 500)))
-print("Очередь модерации загружена в MongoDB")
+moderation_queues = get_count("MODERATION_QUEUE_COUNT", 500)
+db.moderation_queue.insert_many(generate_moderation_queue(moderation_queues))
+print("Очередь модерации загружена в MongoDB: ", moderation_queues)
 
-db.search_queries.insert_many(generate_search_queries(get_count("SEARCH_QUERIES_COUNT", 1000)))
-print("Поисковые запросы загружены в MongoDB")
+search_queries = get_count("SEARCH_QUERIES_COUNT", 1000)
+db.search_queries.insert_many(generate_search_queries(search_queries))
+print("Поисковые запросы загружены в MongoDB: ", search_queries)
 
 print("Все данные успешно загружены в MongoDB")

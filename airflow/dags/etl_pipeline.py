@@ -1,15 +1,16 @@
+import os
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from datetime import datetime
 from pymongo import MongoClient
 import psycopg2
 
-MONGO_URI = "mongodb://admin:admin@etl_mongo:27017/"
-POSTGRES_CONN = "dbname='etl_database' user='postgres' host='etl_postgres' password='postgres'"
+MONGO_URI = os.getenv("MONGO_URI")
+POSTGRES_CONN = f'dbname="{os.getenv("POSTGRES_DB")}" user="{os.getenv("POSTGRES_USER")}" host="{os.getenv("POSTGRES_HOST")}" password="{os.getenv("POSTGRES_PASSWORD")}"'
 
 def extract():
     client = MongoClient(MONGO_URI)
-    db = client["etl_database"]
+    db = client[os.getenv("MONGO_DB")]
     sessions = list(db["UserSessions"].find())
     return sessions
 
