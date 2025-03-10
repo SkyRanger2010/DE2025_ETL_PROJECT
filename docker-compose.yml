@@ -1,6 +1,11 @@
-version: '3.8'
-
 name: de2025_etl_project
+x-postgresql-connection-env: &pg-connect
+  POSTGRESQL_APP_HOST: ${POSTGRESQL_APP_HOST}
+  POSTGRESQL_APP_DB: ${POSTGRESQL_APP_DB}
+  POSTGRESQL_APP_SCHEMA: ${POSTGRESQL_APP_SCHEMA}
+  POSTGRESQL_APP_USER: ${POSTGRESQL_APP_USER}
+  POSTGRESQL_APP_PASSWORD: ${POSTGRESQL_APP_PASSWORD}
+  POSTGRESQL_APP_PORT: ${POSTGRESQL_APP_PORT}
 
 x-airflow-common: &x-airflow-common
   build: /airflow
@@ -14,15 +19,18 @@ x-airflow-common: &x-airflow-common
 
 services:
   postgres:
-    container_name: postgres_db
+    container_name: postgres
     build: db/postgres
     restart: always
-    ports:
-      - "${POSTGRES_PORT}:5432"
     env_file:
       - .env
+    environment:
+      <<: *pg-connect
+      POSTGRES_PASSWORD: ${POSTGRESQL_ROOT_PASSWORD}
+    ports:
+      - "${POSTGRESQL_APP_PORT}:5432"
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRESQL_APP_USER}", "-d", "${POSTGRESQL_APP_DB}"]
       interval: 5s
       retries: 5
     volumes:
@@ -46,8 +54,6 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
-      - /db/mongo/init-mongo.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-
   data_generator:
     build: /data_generator
     container_name: mongo_data_generator
@@ -73,32 +79,34 @@ services:
         condition: service_healthy
     env_file:
       - .env
-    entrypoint: ["/bin/bash", "-c", "
-      airflow db init &&
-      airflow db upgrade &&
-      airflow users create \
-        --username ${AIRFLOW_ADMIN_USERNAME} \
-        --firstname Admin \
-        --lastname User \
-        --role Admin \
-        --email ${AIRFLOW_ADMIN_EMAIL} \
-        --password ${AIRFLOW_ADMIN_PASSWORD} &&
-      airflow connections add 'etl_mongo' \
-        --conn-type 'mongo' \
-        --conn-host 'mongo' \
-        --conn-schema '${MONGO_DB}' \
-        --conn-login '${MONGO_INITDB_ROOT_USERNAME}' \
-        --conn-password '${MONGO_INITDB_ROOT_PASSWORD}' \
-        --conn-port 27017 &&
-      airflow connections add 'etl_postgres' \
-        --conn-type 'postgres' \
-        --conn-host 'postgres' \
-        --conn-schema '${POSTGRES_DB}' \
-        --conn-login '${POSTGRES_USER}' \
-        --conn-password '${POSTGRES_PASSWORD}' \
-        --conn-port 5432
-      "]
-
+    entrypoint:
+      - "/bin/bash"
+      - "-c"
+      - |
+          airflow db init &&
+          airflow db upgrade &&
+          airflow users create \
+            --username ${AIRFLOW_ADMIN_USERNAME} \
+            --firstname Admin \
+            --lastname User \
+            --role Admin \
+            --email ${AIRFLOW_ADMIN_EMAIL} \
+            --password ${AIRFLOW_ADMIN_PASSWORD} &&
+          airflow connections add 'etl_mongo' \
+            --conn-type 'mongo' \
+            --conn-host 'mongo' \
+            --conn-schema '${MONGO_DB}' \
+            --conn-login '${MONGO_INITDB_ROOT_USERNAME}' \
+            --conn-password '${MONGO_INITDB_ROOT_PASSWORD}' \
+            --conn-port 27017 \
+            --conn-extra '{"srv": false, "ssl": false, "allow_insecure": true, "authSource": "admin"}' &&
+          airflow connections add 'etl_postgres' \
+            --conn-type 'postgres' \
+            --conn-host 'postgres' \
+            --conn-schema '${POSTGRESQL_APP_DB}' \
+            --conn-login '${POSTGRESQL_APP_USER}' \
+            --conn-password '${POSTGRESQL_APP_PASSWORD}' \
+            --conn-port 5432
   airflow-webserver:
     <<: *x-airflow-common
     container_name: airflow_webserver
