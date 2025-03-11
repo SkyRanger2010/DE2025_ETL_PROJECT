@@ -13,4 +13,4 @@ psql -v ON_ERROR_STOP=1 -U "postgres" -f /tmp/sql/init_db.sql
 psql -v ON_ERROR_STOP=1 -U "postgres" -f /tmp/sql/airflow_db.sql
 
 # Удаление временной директории
-rm -rf /tmp/sql
+# rm -rf /tmp/sql
