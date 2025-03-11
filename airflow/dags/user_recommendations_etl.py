@@ -1,8 +1,7 @@
 import logging
 import os
-import uuid
-from datetime import datetime
 import pandas as pd
+from datetime import datetime
 
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -10,12 +9,12 @@ from airflow.operators.dummy_operator import DummyOperator
 from airflow.providers.mongo.hooks.mongo import MongoHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
-collection_name="user_sessions"
+collection_name = "user_recommendations"
 
 # Логирование
 logging.basicConfig(level=logging.INFO)
 
-DAG_NAME = collection_name+'_etl'
+DAG_NAME = collection_name + '_etl'
 
 default_args = {
     'owner': 'airflow',
@@ -52,16 +51,16 @@ def transform(**kwargs):
 
     df = pd.DataFrame(extracted_data)
 
-    # Заполняем NaN в списках пустыми значениями
-    df['pages_visited'] = df['pages_visited'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
-    df['actions'] = df['actions'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
+    # Разворачиваем рекомендованные продукты в отдельные строки
+    df_exploded = df.explode("recommended_products").reset_index(drop=True)
+    df_exploded = df_exploded.rename(columns={'recommended_products' : 'recommended_product'})
 
     # Удаляем дубликаты
-    df.drop_duplicates(subset=["session_id"], inplace=True)
-    df.fillna("", inplace=True)
+    df_exploded.drop_duplicates(subset=['user_id', 'recommended_product'], inplace=True)
+    df_exploded.dropna(axis="rows", how='any', inplace=True)
 
-    logging.info(f"Трансформировано {len(df)} записей")
-    ti.xcom_push(key='transformed_data', value=df.to_dict(orient='records'))
+    logging.info(f"Трансформировано {len(df_exploded)} записей")
+    ti.xcom_push(key='transformed_data', value=df_exploded.to_dict(orient='records'))
 
 def load(**kwargs):
     """Загружает данные в PostgreSQL"""
@@ -77,15 +76,18 @@ def load(**kwargs):
 
     df = pd.DataFrame(transformed_data)
 
-    # Преобразуем поля в datetime
-    df['start_time'] = pd.to_datetime(df['start_time'])
-    df['end_time'] = pd.to_datetime(df['end_time'])
+    # Преобразуем поля
+    df['last_updated'] = pd.to_datetime(df['last_updated'])
 
-    #Устанавливаем индекс
-    df.set_index("session_id", inplace=True)
+    # Меняем порядок столбцов
+    neworder = ['user_id', 'recommended_product', 'last_updated']
+    df = df.reindex(columns=neworder)
 
-    # Загружаем данные в PostgreSQL
-    df.to_sql(collection_name, schema="source", con=engine, if_exists="replace", index=True)
+    # Устанавливаем индекс
+    df.set_index(['user_id', 'recommended_product'], inplace=True)
+
+    # Загружаем данные в PostgreSQL с обработкой дубликатов
+    df.to_sql(collection_name, schema="source", con=engine, if_exists="append", index=True)
 
     logging.info(f"Загружено {len(df)} записей в PostgreSQL")
 

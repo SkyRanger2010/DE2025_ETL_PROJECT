@@ -1,1 +1,1 @@
-apache-airflow-providers-mongorequestsbeautifulsoup4psycopg2-binarypymongo
+apache-airflow-providers-mongoapache-airflow-providers-postgresrequestsbeautifulsoup4psycopg2-binarypymongo

@@ -1,6 +1,5 @@
 import logging
 import os
-import uuid
 from datetime import datetime
 import pandas as pd
 
@@ -10,7 +9,7 @@ from airflow.operators.dummy_operator import DummyOperator
 from airflow.providers.mongo.hooks.mongo import MongoHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
-collection_name="user_sessions"
+collection_name="event_logs"
 
 # Логирование
 logging.basicConfig(level=logging.INFO)
@@ -52,13 +51,11 @@ def transform(**kwargs):
 
     df = pd.DataFrame(extracted_data)
 
-    # Заполняем NaN в списках пустыми значениями
-    df['pages_visited'] = df['pages_visited'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
-    df['actions'] = df['actions'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
 
-    # Удаляем дубликаты
-    df.drop_duplicates(subset=["session_id"], inplace=True)
+    # Удаляем дубликаты и заполняем нули
+    df.drop_duplicates(subset=["event_id"], inplace=True)
     df.fillna("", inplace=True)
+
 
     logging.info(f"Трансформировано {len(df)} записей")
     ti.xcom_push(key='transformed_data', value=df.to_dict(orient='records'))
@@ -77,12 +74,11 @@ def load(**kwargs):
 
     df = pd.DataFrame(transformed_data)
 
-    # Преобразуем поля в datetime
-    df['start_time'] = pd.to_datetime(df['start_time'])
-    df['end_time'] = pd.to_datetime(df['end_time'])
+    # Преобразуем start_time в datetime
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
 
     #Устанавливаем индекс
-    df.set_index("session_id", inplace=True)
+    df.set_index("event_id", inplace=True)
 
     # Загружаем данные в PostgreSQL
     df.to_sql(collection_name, schema="source", con=engine, if_exists="replace", index=True)

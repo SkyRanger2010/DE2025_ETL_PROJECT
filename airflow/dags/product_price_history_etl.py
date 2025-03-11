@@ -1,8 +1,7 @@
 import logging
 import os
-import uuid
-from datetime import datetime
 import pandas as pd
+from datetime import datetime
 
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
@@ -10,12 +9,12 @@ from airflow.operators.dummy_operator import DummyOperator
 from airflow.providers.mongo.hooks.mongo import MongoHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
-collection_name="user_sessions"
+collection_name = "product_price_history"
 
 # Логирование
 logging.basicConfig(level=logging.INFO)
 
-DAG_NAME = collection_name+'_etl'
+DAG_NAME = collection_name + '_etl'
 
 default_args = {
     'owner': 'airflow',
@@ -52,16 +51,21 @@ def transform(**kwargs):
 
     df = pd.DataFrame(extracted_data)
 
-    # Заполняем NaN в списках пустыми значениями
-    df['pages_visited'] = df['pages_visited'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
-    df['actions'] = df['actions'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
+    # Разворачиваем историю цен в отдельные строки
+    df_exploded = df.explode("price_changes").reset_index(drop=True)
+
+    # Нормализуем словари в price_changes
+    price_history_df = df_exploded["price_changes"].apply(pd.Series)
+
+    # Объединяем с исходными данными
+    df_transformed = pd.concat([df_exploded.drop(columns=["price_changes"]), price_history_df], axis=1)
 
     # Удаляем дубликаты
-    df.drop_duplicates(subset=["session_id"], inplace=True)
-    df.fillna("", inplace=True)
+    df_transformed.drop_duplicates(subset=['product_id', 'date'], inplace=True)
+    df_transformed.dropna(axis="rows", how='any', inplace=True)
 
-    logging.info(f"Трансформировано {len(df)} записей")
-    ti.xcom_push(key='transformed_data', value=df.to_dict(orient='records'))
+    logging.info(f"Трансформировано {len(df_transformed)} записей")
+    ti.xcom_push(key='transformed_data', value=df_transformed.to_dict(orient='records'))
 
 def load(**kwargs):
     """Загружает данные в PostgreSQL"""
@@ -77,15 +81,18 @@ def load(**kwargs):
 
     df = pd.DataFrame(transformed_data)
 
-    # Преобразуем поля в datetime
-    df['start_time'] = pd.to_datetime(df['start_time'])
-    df['end_time'] = pd.to_datetime(df['end_time'])
+    # Преобразуем поля
+    df['date'] = pd.to_datetime(df['date'])
 
-    #Устанавливаем индекс
-    df.set_index("session_id", inplace=True)
+    # Меняем порядок столбцов
+    neworder = ['product_id', 'date', 'price','currency', 'current_price']
+    df = df.reindex(columns=neworder)
 
-    # Загружаем данные в PostgreSQL
-    df.to_sql(collection_name, schema="source", con=engine, if_exists="replace", index=True)
+    # Устанавливаем индекс
+    df.set_index(['product_id', 'date'], inplace=True)
+
+    # Загружаем данные в PostgreSQL с обработкой дубликатов
+    df.to_sql(collection_name, schema="source", con=engine, if_exists="append", index=True)
 
     logging.info(f"Загружено {len(df)} записей в PostgreSQL")
 

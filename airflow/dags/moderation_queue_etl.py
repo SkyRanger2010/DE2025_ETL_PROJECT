@@ -1,6 +1,5 @@
 import logging
 import os
-import uuid
 from datetime import datetime
 import pandas as pd
 
@@ -10,12 +9,13 @@ from airflow.operators.dummy_operator import DummyOperator
 from airflow.providers.mongo.hooks.mongo import MongoHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
-collection_name="user_sessions"
+collection_name="moderation_queue"
 
 # Логирование
 logging.basicConfig(level=logging.INFO)
 
-DAG_NAME = collection_name+'_etl'
+
+DAG_NAME = collection_name+"_etl"
 
 default_args = {
     'owner': 'airflow',
@@ -53,11 +53,10 @@ def transform(**kwargs):
     df = pd.DataFrame(extracted_data)
 
     # Заполняем NaN в списках пустыми значениями
-    df['pages_visited'] = df['pages_visited'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
-    df['actions'] = df['actions'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
+    df['flags'] = df['flags'].apply(lambda x: ', '.join(x) if isinstance(x, list) else '')
 
     # Удаляем дубликаты
-    df.drop_duplicates(subset=["session_id"], inplace=True)
+    df.drop_duplicates(subset=["review_id"], inplace=True)
     df.fillna("", inplace=True)
 
     logging.info(f"Трансформировано {len(df)} записей")
@@ -78,14 +77,13 @@ def load(**kwargs):
     df = pd.DataFrame(transformed_data)
 
     # Преобразуем поля в datetime
-    df['start_time'] = pd.to_datetime(df['start_time'])
-    df['end_time'] = pd.to_datetime(df['end_time'])
+    df['submitted_at'] = pd.to_datetime(df['submitted_at'])
 
     #Устанавливаем индекс
-    df.set_index("session_id", inplace=True)
+    df.set_index("review_id", inplace=True)
 
     # Загружаем данные в PostgreSQL
-    df.to_sql(collection_name, schema="source", con=engine, if_exists="replace", index=True)
+    df.to_sql(name=collection_name, schema="source", con=engine, if_exists="replace", index=True)
 
     logging.info(f"Загружено {len(df)} записей в PostgreSQL")
 
