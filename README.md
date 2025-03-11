@@ -42,13 +42,13 @@ DE2025_ETL_PROJECT/
 │   └── plugins/                # Плагины Airflow  
 │
 ├── data_generator/             # Сервис генератора данных для MongoDB
-│   ├── Dockerfile                      # Докерфайл генератора данных
-│   ├── generate_data.py                # Python-скрипт генерирующий данные
-│   └── requirements.txt                # Зависимости сервиса генератора данных
+│   ├── Dockerfile                          # Докерфайл генератора данных
+│   ├── generate_data.py                    # Python-скрипт генерирующий данные
+│   └── requirements.txt                    # Зависимости сервиса генератора данных
 │
 └── db/                         # Сервисы баз данных проекта
-    ├── mongo/                          # Сервис MongoDB
-    └── postgres/                       # Сервис PostgeSQL
+    ├── mongo/                              # Сервис MongoDB
+    └── postgres/                           # Сервис PostgeSQL
 ```  
 
 ## Развертывание проекта
