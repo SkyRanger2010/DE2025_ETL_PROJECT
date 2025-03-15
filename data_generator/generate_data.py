@@ -1,7 +1,8 @@
-from pymongo import MongoClient
+from pymongo import MongoClient, errors
 import os
 import random
 import uuid
+import logging
 from datetime import datetime, timedelta
 from faker import Faker
 from dotenv import load_dotenv
@@ -11,17 +12,28 @@ load_dotenv()
 
 # Настройки MongoDB
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://admin:admin@mongo:27017")
-client = MongoClient(MONGO_URI)
-db = client[os.getenv("MONGO_DB")]
+DB_NAME = os.getenv("MONGO_DB", "etl_database")
+
+# Подключение к MongoDB
+try:
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    db = client[DB_NAME]
+    client.server_info()  # Проверка подключения
+except errors.ServerSelectionTimeoutError:
+    logging.error("Не удалось подключиться к MongoDB. Проверьте настройки подключения.")
+    exit(1)
 
 # Инициализация Faker
 fake = Faker()
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Функция для получения количества записей из .env
 def get_count(var_name, default):
     return int(os.getenv(var_name, default))
 
-# Предварительная генерация пользователей и продуктов
+# Генерация пользователей и продуктов
 users = [str(uuid.uuid4()) for _ in range(get_count("USER_COUNT", 1000))]
 products = [str(uuid.uuid4()) for _ in range(get_count("PRODUCT_COUNT", 500))]
 
@@ -61,17 +73,17 @@ def generate_event_logs(n):
     } for _ in range(n)]
 
 def generate_support_tickets(n):
-    """Генерация тикетов поддержки."""
+    """Генерация тикетов поддержки с корректными датами обновления."""
     statuses = ["open", "closed", "pending"]
     issues = ["login issue", "payment failure", "bug report", "feature request"]
     return [{
         "ticket_id": str(uuid.uuid4()),
         "user_id": random.choice(users),
-        "status": random.choice(statuses),
+        "status": (status := random.choice(statuses)),
         "issue_type": random.choice(issues),
         "messages": [fake.sentence() for _ in range(random.randint(1, 5))],
-        "created_at": fake.date_time_this_year().isoformat(),
-        "updated_at": fake.date_time_this_year().isoformat()
+        "created_at": (created := fake.date_time_this_year()).isoformat(),
+        "updated_at": (created + timedelta(hours=random.randint(1, 48))).isoformat()
     } for _ in range(n)]
 
 def generate_user_recommendations(n):
@@ -107,35 +119,26 @@ def generate_search_queries(n):
         "results_count": random.randint(0, 50)
     } for _ in range(n)]
 
-print("Начинается генерация данных...")
+def insert_data(collection_name, generator, count):
+    """Функция вставки данных с обработкой ошибок."""
+    try:
+        logging.info(f"Генерация данных для {collection_name}...")
+        data = generator(count)
+        if data:
+            db[collection_name].insert_many(data)
+            logging.info(f"{collection_name} успешно загружены в MongoDB: {count} записей")
+    except Exception as e:
+        logging.error(f"Ошибка при загрузке {collection_name}: {e}")
 
-# Генерация и вставка данных в MongoDB
-session_counts = get_count("USER_SESSIONS_COUNT", 1000)
-db.user_sessions.insert_many(generate_user_sessions(session_counts))
-print("Сессии пользователей загружены в MongoDB:", session_counts)
+# Запуск генерации и вставки данных
+logging.info("🚀 Начинается генерация данных...")
 
-price_histories = get_count("PRODUCT_PRICE_HISTORY_COUNT", 1000)
-db.product_price_history.insert_many(generate_product_price_history(price_histories))
-print("История цен загружена в MongoDB: ", price_histories)
+insert_data("user_sessions", generate_user_sessions, get_count("USER_SESSIONS_COUNT", 1000))
+insert_data("product_price_history", generate_product_price_history, get_count("PRODUCT_PRICE_HISTORY_COUNT", 1000))
+insert_data("event_logs", generate_event_logs, get_count("EVENT_LOGS_COUNT", 2000))
+insert_data("support_tickets", generate_support_tickets, get_count("SUPPORT_TICKETS_COUNT", 500))
+insert_data("user_recommendations", generate_user_recommendations, get_count("USER_RECOMMENDATIONS_COUNT", 1000))
+insert_data("moderation_queue", generate_moderation_queue, get_count("MODERATION_QUEUE_COUNT", 500))
+insert_data("search_queries", generate_search_queries, get_count("SEARCH_QUERIES_COUNT", 1000))
 
-event_logs = get_count("EVENT_LOGS_COUNT", 2000)
-db.event_logs.insert_many(generate_event_logs(event_logs))
-print("Логи событий загружены в MongoDB: ", event_logs)
-
-support_tickets = get_count("SUPPORT_TICKETS_COUNT", 500)
-db.support_tickets.insert_many(generate_support_tickets(support_tickets))
-print("Тикеты поддержки загружены в MongoDB: ", support_tickets)
-
-user_recommendations = get_count("USER_RECOMMENDATIONS_COUNT", 1000)
-db.user_recommendations.insert_many(generate_user_recommendations(user_recommendations))
-print("Рекомендации пользователей загружены в MongoDB: ", user_recommendations)
-
-moderation_queues = get_count("MODERATION_QUEUE_COUNT", 500)
-db.moderation_queue.insert_many(generate_moderation_queue(moderation_queues))
-print("Очередь модерации загружена в MongoDB: ", moderation_queues)
-
-search_queries = get_count("SEARCH_QUERIES_COUNT", 1000)
-db.search_queries.insert_many(generate_search_queries(search_queries))
-print("Поисковые запросы загружены в MongoDB: ", search_queries)
-
-print("Все данные успешно загружены в MongoDB")
+logging.info("✅ Все данные успешно загружены в MongoDB!")

@@ -16,7 +16,8 @@ dag = DAG(
     dag_id=f'{name_mart}_create',
     default_args=default_args,
     description='Создание витрины пользовательской активности',
-    schedule_interval='@daily',
+    schedule_interval=None,
+    is_paused_upon_creation=False,
     catchup=False
 )
 

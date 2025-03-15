@@ -42,7 +42,11 @@ DE2025_ETL_PROJECT/
 │   │   ├── user_recommendations_etl.py     # DAG для репликации user_recommendations
 │   │   ├── moderation_queue_etl.py         # DAG для репликации moderation_queue
 │   │   ├── support_tickets_etl.py          # DAG для репликации support_tickets
-│   │   └── product_price_history_etl.py    # DAG для репликации product_price_history
+│   │   ├── product_price_history_etl.py    # DAG для репликации product_price_history
+│   │   ├── mart_users_activity.py          # DAG для построения витрины пользовательской активности
+│   │   ├── mart_support_efficiency.py      # DAG для построения витрины эффективности работы поддержки
+│   │   ├── users_activity_pipeline.py      # DAG автопайплайна витрины пользовательской активности
+│   │   └── support_efficiency_pipeline.py  # DAG автопайплайна витрины эффективности работы поддержки
 │   │
 │   ├── logs/                   # Логи Airflow
 │   └── plugins/                # Плагины Airflow  
@@ -148,47 +152,39 @@ DE2025_ETL_PROJECT/
 - **Загрузка данных (`load`)**: Данные записываются в PostgreSQL с помощью `sqlalchemy` и `pandas.to_sql()`, что позволяет автоматизировать создание таблиц и загрузку данных.
 - **Автоматизация процессов**: Управление пайплайнами осуществляется с помощью **Apache Airflow**, где DAG'и выполняют поэтапное выполнение задач в зависимости от установленного расписания.
 - **Построение витрин**: Для построения витрин данных используется механизм прямых запросов в БД PostgreSQL с помощью **SQLExecuteQueryOperator** в DAG. Тексты запросов вынесены в отдельные файлы `.sql`
+- **Автопайплайны**: Используется **TriggerDagRunOperator** для запуска и контроля завершения необходимых репликаций перед формированием витрины
 
-### 1. Репликация данных user_sessions
-- **Извлечение (`extract`)**: данные загружаются из MongoDB (коллекция `user_sessions`).
-- **Трансформация (`transform`)**: преобразование массивов, нормализация данных, удаление дубликатов.
-- **Загрузка (`load`)**: создание индексов, переупорядочивание колонок, запись данных в PostgreSQL (`source.user_sessions`).
+## 1 Пайплайны репликации данных
 
-### 2. Репликация данных event_logs
-- **Извлечение (`extract`)**: данные загружаются из MongoDB (коллекция `event_logs`).
-- **Трансформация (`transform`)**: удаление дубликатов, заполнение пропущенных значений.
-- **Загрузка (`load`)**: создание индексов, переупорядочивание колонок, запись данных в PostgreSQL (`source.event_logs`).
+Эти пайплайны **извлекают данные из MongoDB**, очищают их и загружают в **PostgreSQL (`source.*`)**.  
 
-### 3. Репликация данных search_queries
-- **Извлечение (`extract`)**: данные загружаются из MongoDB (коллекция `search_queries`).
-- **Трансформация (`transform`)**: преобразование массива `filters` в строку, удаление дубликатов, нормализация данных.
-- **Загрузка (`load`)**: создание индексов, переупорядочивание колонок, запись данных в PostgreSQL (`source.search_queries`).
+| DAG ID                     | Источник данных          | Назначение в PostgreSQL   |
+|----------------------------|--------------------------|---------------------------|
+| `user_sessions_etl`        | `MongoDB.user_sessions`  | `source.user_sessions`    |
+| `event_logs_etl`           | `MongoDB.event_logs`     | `source.event_logs`       |
+| `search_queries_etl`       | `MongoDB.search_queries` | `source.search_queries`   |
+| `user_recommendations_etl` | `MongoDB.user_recommendations` | `source.user_recommendations` |
+| `moderation_queue_etl`     | `MongoDB.moderation_queue` | `source.moderation_queue` |
+| `support_tickets_etl`      | `MongoDB.support_tickets` | `source.support_tickets` |
+| `product_price_history_etl` | `MongoDB.product_price_history` | `source.product_price_history` |
 
-### 4. Репликация данных user_recommendations
-- **Извлечение (`extract`)**: данные загружаются из MongoDB (коллекция `user_recommendations`).
-- **Трансформация (`transform`)**: разворачивание массива `recommended_products` в строки, нормализация данных.
-- **Загрузка (`load`)**: создание индексов, переупорядочивание колонок, запись данных в PostgreSQL (`source.user_recommendations`).
+### Как работает процесс?
+1. **Извлечение (`Extract`)**  
+   - Данные загружаются из MongoDB с использованием `pymongo`.
 
-### 5. Репликация данных moderation_queue
-- **Извлечение (`extract`)**: данные загружаются из MongoDB (коллекция `moderation_queue`).
-- **Трансформация (`transform`)**: преобразование массива `flags`, удаление дубликатов, нормализация данных.
-- **Загрузка (`load`)**: создание индексов, переупорядочивание колонок, запись данных в PostgreSQL (`source.moderation_queue`).
+2. **Трансформация (`Transform`)**  
+   - Очистка данных от дубликатов.
+   - Приведение типов (`datetime`, `decimal`, `array` → `SQL-совместимые`).
+   - Разбивка вложенных структур (например, `recommended_products`) и нормализация таблицы.
 
-### 6. Репликация данных support_tickets
-- **Извлечение (`extract`)**: данные загружаются из MongoDB (коллекция `support_tickets`).
-- **Трансформация (`transform`)**: удаление дубликатов, заполнение пропущенных значений, нормализация данных.
-- **Загрузка (`load`)**: создание индексов, переупорядочивание колонок, запись данных в PostgreSQL (`source.support_tickets`).
+3. **Загрузка (`Load`)**  
+   - Данные записываются в PostgreSQL (`source.*`).
+   - Создаются индексы для ускорения аналитических запросов.
 
-### 7. Репликация данных product_price_history
-- **Извлечение (`extract`)**: данные загружаются из MongoDB (коллекция `product_price_history`).
-- **Трансформация (`transform`)**: разворачивание истории цен, нормализация данных.
-- **Загрузка (`load`)**: создание индексов, переупорядочивание колонок, запись данных в PostgreSQL (`source.product_price_history`).
+---
+### 2. Пайплайны создания аналитических витрин
 
-### 8. Создание аналитических витрин
-
-После репликации данных из MongoDB в PostgreSQL формируются аналитические витрины. Эти витрины представляют собой агрегированные данные, подготовленные для удобного анализа и построения отчетности.
-
-#### 8.1 Витрина активности пользователей (`mart.users_activity_mart`)
+#### 2.1 Витрина активности пользователей (`mart.users_activity_mart`)
 **Описание:**  
 Эта витрина агрегирует данные о пользовательской активности на основе их сессий, поисковых запросов, обращений в поддержку и рекомендаций продуктов.
 
@@ -211,7 +207,7 @@ DE2025_ETL_PROJECT/
 
 ---
 
-#### 8.2 Витрина эффективности работы поддержки (`mart.support_efficiency_mart`)
+#### 2.2 Витрина эффективности работы поддержки (`mart.support_efficiency_mart`)
 **Описание:**  
 Эта витрина агрегирует статистику по обработке обращений пользователей в поддержку, группируя данные по **типу обращения (`issue_type`)** и **дню создания (`created_date`)**.
 
@@ -232,7 +228,33 @@ DE2025_ETL_PROJECT/
 **Источник данных:**
 - `source.support_tickets`
 
+### 3. Автопайплайны
+
+#### 3.1 Автопайплайн для витрины активности пользователей.
+**DAG:** `run_users_activity_pipeline`  
+
+### Как работает?
+   1. **Запускает DAG'и репликации данных** (`TriggerDagRunOperator`):
+      - `user_sessions_etl`
+      - `search_queries_etl`
+      - `support_tickets_etl`
+      - `user_recommendations_etl`
+
+   2. **Ждет их завершения** (`wait_for_completion`=`True`).
+   3. **Запускает DAG `users_activity_mart_create`** для обновления витрины.
+
+#### 3.2 Автопайплайн для витрины эффективности работы поддержки.
+**DAG:** `run_support_efficiency_pipeline`  
+
+### Как работает?
+   1. **Запускает DAG репликации данных** (`TriggerDagRunOperator`):
+      - `support_tickets_etl`
+
+   2. **Ждет его завершения** (`wait_for_completion`=`True`).
+   3. **Запускает DAG `support_efficiency_mart_create`** для обновления витрины.
+
 ---
+
 ## Контакты
 Автор: *Василий Сатанцев*  
 Email: *vasily.satantsev@gmail.com*  

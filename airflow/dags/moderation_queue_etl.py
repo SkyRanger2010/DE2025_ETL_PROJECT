@@ -25,7 +25,8 @@ default_args = {
 
 dag = DAG(DAG_NAME,
           default_args=default_args,
-          schedule_interval="@daily",
+          schedule_interval=None,
+          is_paused_upon_creation=False,
           catchup=False
           )
 
