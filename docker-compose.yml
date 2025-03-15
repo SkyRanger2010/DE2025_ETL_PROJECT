@@ -8,7 +8,7 @@ x-postgresql-connection-env: &pg-connect
   POSTGRESQL_APP_PORT: ${POSTGRESQL_APP_PORT}
 
 x-airflow-common: &x-airflow-common
-  build: /airflow
+  build: ./airflow
   env_file:
     - .env
   volumes:
@@ -37,7 +37,7 @@ services:
       - pg_data:/var/lib/postgresql/data
 
   mongo:
-    build: db/mongo
+    build: ./db/mongo
     container_name: mongo
     restart: always
     env_file:
@@ -55,7 +55,7 @@ services:
     volumes:
       - mongo_data:/data/db
   data_generator:
-    build: /data_generator
+    build: ./data_generator
     container_name: mongo_data_generator
     depends_on:
       mongo:
@@ -70,7 +70,7 @@ services:
     command: ["python", "generate_data.py"]
 
   airflow-init:
-    build: /airflow
+    build: ./airflow
     container_name: airflow_init
     depends_on:
       postgres:
