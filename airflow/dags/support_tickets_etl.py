@@ -6,6 +6,7 @@ import pandas as pd
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.dummy_operator import DummyOperator
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 from airflow.providers.mongo.hooks.mongo import MongoHook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 
@@ -25,7 +26,8 @@ default_args = {
 
 dag = DAG(DAG_NAME,
           default_args=default_args,
-          schedule_interval="@daily",
+          schedule_interval=None,
+          is_paused_upon_creation=False,
           catchup=False
           )
 
@@ -96,6 +98,7 @@ task_finish = DummyOperator(task_id='finish', dag=dag)
 task_extract = PythonOperator(task_id='extract', python_callable=extract, provide_context=True, dag=dag)
 task_transform = PythonOperator(task_id='transform', python_callable=transform, provide_context=True, dag=dag)
 task_load = PythonOperator(task_id='load', python_callable=load, provide_context=True, dag=dag)
+
 
 # Определяем порядок выполнения
 task_start >> task_extract >> task_transform >> task_load >> task_finish
