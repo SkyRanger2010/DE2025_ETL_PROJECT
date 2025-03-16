@@ -67,15 +67,23 @@ DE2025_ETL_PROJECT/
    git clone https://github.com/SkyRanger2010/DE2025_ETL_PROJECT.git
    cd DE2025_ETL_PROJECT
    ```
-2. **Запустите Docker-контейнеры:**
+2.**ДАйте необходимые права на папку с логами airflow:**
+   ```bash
+   sudo useradd -m -d /home/airflow -s /bin/bash airflow
+   sudo groupadd airflow
+   sudo usermod -aG airflow airflow
+   sudo chown -R airflow:airflow ./airflow/logs
+   sudo chmod -R 777 ./airflow/logs
+   ```
+3. **Запустите Docker-контейнеры:**
    ```bash
    docker-compose up -d
    ```
-3. **Откройте Airflow в браузере:**
+4. **Откройте Airflow в браузере:**
    ```
    http://localhost:8080
    ```
-4. **Запустите DAG'и в Airflow:**
+5. **Запустите DAG'и в Airflow:**
    - Перейдите в интерфейс Apache Airflow.
    - Запустите выполнение необходимых DAG'ов вручную.
 
