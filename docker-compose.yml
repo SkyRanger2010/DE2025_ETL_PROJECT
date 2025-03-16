@@ -21,7 +21,7 @@ x-airflow-common: &x-airflow-common
 services:
   postgres:
     container_name: postgres
-    build: db/postgres
+    build: ./db/postgres
     restart: always
     env_file:
       - .env
@@ -44,7 +44,7 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:${MONGO_PORT}/test --quiet
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
@@ -52,7 +52,7 @@ services:
       MONGO_DB: ${MONGO_DB}
       MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/
     ports:
-      - "27017:27017"
+      - "${MONGO_PORT}:27017"
     volumes:
       - mongo_data:/data/db
   data_generator:
@@ -67,7 +67,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
       MONGO_DB: ${MONGO_DB}
-      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:27017/
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongo:${MONGO_PORT}/
     command: ["python", "generate_data.py"]
 
   airflow-init:
@@ -99,7 +99,7 @@ services:
             --conn-schema '${MONGO_DB}' \
             --conn-login '${MONGO_INITDB_ROOT_USERNAME}' \
             --conn-password '${MONGO_INITDB_ROOT_PASSWORD}' \
-            --conn-port 27017 \
+            --conn-port '${MONGO_PORT}' \
             --conn-extra '{"srv": false, "ssl": false, "allow_insecure": true, "authSource": "admin"}' &&
           airflow connections add 'etl_postgres' \
             --conn-type 'postgres' \
@@ -107,7 +107,7 @@ services:
             --conn-schema '${POSTGRESQL_APP_DB}' \
             --conn-login '${POSTGRESQL_APP_USER}' \
             --conn-password '${POSTGRESQL_APP_PASSWORD}' \
-            --conn-port 5432
+            --conn-port '${POSTGRESQL_APP_PORT}'
   airflow-webserver:
     <<: *x-airflow-common
     container_name: airflow_webserver
