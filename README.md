@@ -67,7 +67,7 @@ DE2025_ETL_PROJECT/
    git clone https://github.com/SkyRanger2010/DE2025_ETL_PROJECT.git
    cd DE2025_ETL_PROJECT
    ```
-2.**ДАйте необходимые права на папку с логами airflow:**
+2. **Дайте необходимые права на папку с логами airflow:**
    ```bash
    sudo useradd -m -d /home/airflow -s /bin/bash airflow
    sudo groupadd airflow
